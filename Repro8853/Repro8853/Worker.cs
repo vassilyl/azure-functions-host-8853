@@ -1,18 +1,14 @@
+﻿using Microsoft.Extensions.Logging;
 using System;
-using System.IO;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Extensions.Http;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Repro8853
 {
-    public static class Function1
+    internal static class Worker
     {
         static bool CheckPrime(long candidate, CancellationToken token)
         {
@@ -25,15 +21,9 @@ namespace Repro8853
             }
             return remainder != 0;
         }
-
-        [FunctionName("Function1")]
-        public static async Task<IActionResult> Run(
-            [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req,
-            ILogger log)
+        
+        public static long Run(double cpuSeconds, ILogger log)
         {
-            log.LogInformation("C# HTTP trigger function processed a request.");
-
-            double cpuSeconds = double.Parse(req.Query["cpuSeconds"]);
             var stop = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(cpuSeconds);
             log.LogInformation($"Will stop at {stop}");
 
@@ -55,7 +45,7 @@ namespace Repro8853
             while (DateTimeOffset.UtcNow < stop)
             {
                 var idx = Task.WaitAny(workers);
-                if (workers[idx].Result)
+                if (workers[idx].Result && candidates[idx] > found)
                 {
                     found = candidates[idx];
                 }
@@ -65,7 +55,7 @@ namespace Repro8853
                 workers[idx] = Task.Run(() => CheckPrime(copy, cts.Token));
             }
             cts.Cancel();
-            return new OkObjectResult($"Last prime number found is {found}.");
+            return found;
         }
     }
 }
